@@ -94,7 +94,7 @@ model.add(Dense(1))
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Early stopping to prevent overfitting
-early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+early_stop = EarlyStopping(monitor='val_loss', patience=100, restore_best_weights=True)
 
 # Train the model
 history = model.fit(
