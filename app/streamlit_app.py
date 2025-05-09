@@ -7,27 +7,31 @@ import logging
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-# ... (rest of your imports and setup code from before) ...
+# Ensure project root is correctly identified for module imports
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.fetch_update import update_historical_data
-from src.features.preprocessing import load_processed_data, add_calendar_features
+# Import your custom modules
+from src.data.fetch_update import update_historical_data # This now handles S3
+from src.features.preprocessing import add_calendar_features
 from src.models.predict_lstm import load_artifacts, forecast_next_days
 
+# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Page configuration
 st.set_page_config(
     page_title="Edersee Wasserstandsprognose",
     page_icon="💧",
     layout="wide",
 )
 
-DATA_PATH = PROJECT_ROOT / "data" / "processed" / "water_levels_daily.csv"
+# Paths to model artifacts (these are relative to the project root inside the container)
 MODEL_PATH = PROJECT_ROOT / "models" / "water_level_lstm.keras"
 SCALER_PATH = PROJECT_ROOT / "models" / "LSTM_standard_scaler.joblib"
 
+# Custom CSS for styling
 st.markdown("""
 <style>
     .metric-card {
@@ -62,22 +66,41 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=3600)
-def load_data_wrapper():
+# Cached function to load and update data from S3/API
+@st.cache_data(ttl=3600) # Cache for 1 hour
+def load_data_from_s3_and_api(): # Renamed from load_data_wrapper
     try:
-        logger.info(f"Attempting to update data at {DATA_PATH}")
-        update_historical_data(DATA_PATH, days=15)
-        df = load_processed_data(DATA_PATH)
-        logger.info(f"Data loaded successfully. Shape: {df.shape}")
+        logger.info("Attempting to update and load data from S3 and API...")
+        # update_historical_data now handles S3 read/write and returns the full df
+        df = update_historical_data(days=35) # Using 35 days to align with fetch_update.py default
+
+        if df is None or df.empty:
+            st.error("Kritischer Fehler: Keine Daten von S3 oder API geladen.")
+            logger.error("update_historical_data returned None or empty DataFrame.")
+            return None
+
+        if "value" not in df.columns:
+             logger.error("DataFrame from update_historical_data is missing 'value' column.")
+             st.error("Datenfehler: 'value'-Spalte fehlt nach dem Update-Prozess.")
+             return None
+        
+        missing_count = df["value"].isna().sum()
+        if missing_count > 0:
+            logger.info(f"Interpolating {missing_count} missing values in the data.")
+            df["value"] = df["value"].interpolate(method="time")
+            df["value"] = df["value"].fillna(method='ffill').fillna(method='bfill')
+
+        if df["value"].isna().any():
+            logger.warning("Data still contains NaN values after all interpolation attempts.")
+
+        logger.info(f"Data loaded and preprocessed successfully. Shape: {df.shape}")
         return df
-    except FileNotFoundError:
-        st.error(f"Kritischer Fehler: Verarbeitete Datendatei nicht gefunden unter {DATA_PATH}. Stellen Sie sicher, dass die initialen Skripte zur Datenbeschaffung ausgeführt wurden.")
-        return None
     except Exception as e:
-        st.error(f"Fehler beim Laden der Daten: {str(e)}")
-        logger.error(f"Data loading error: {e}", exc_info=True)
+        st.error(f"Fehler beim Laden und Aktualisieren der Daten: {str(e)}")
+        logger.error(f"Data loading/update error: {e}", exc_info=True)
         return None
 
+# Cached function to load model and scaler
 @st.cache_resource
 def load_model_and_scaler_wrapper():
     try:
@@ -87,28 +110,30 @@ def load_model_and_scaler_wrapper():
         return model, scaler
     except FileNotFoundError:
         st.error(f"Kritischer Fehler: Modell- oder Skaliererdatei nicht gefunden. Gesucht unter {MODEL_PATH} und {SCALER_PATH}.")
+        logger.error(f"Model or scaler file not found. Model: {MODEL_PATH}, Scaler: {SCALER_PATH}", exc_info=True)
         return None, None
     except Exception as e:
         st.error(f"Fehler beim Laden von Modell/Skalierer: {str(e)}")
-        logger.error(f"Model loading error: {e}", exc_info=True)
+        logger.error(f"Model/scaler loading error: {e}", exc_info=True)
         return None, None
 
+# Helper function to format change values for display
 def format_change(value, abs_value=False):
     value_str = f"{abs(value) if abs_value else value:.2f} m"
     if value > 0.005: return f'<span class="change-positive">▲ {value_str}</span>'
     elif value < -0.005: return f'<span class="change-negative">▼ {value_str}</span>'
     else: return f'<span class="change-neutral">― {value_str}</span>'
 
-
+# Plotting function using Plotly (reverted to original logic for vertical line and annotation)
 def plot_water_levels_plotly(filtered_historical_data, forecast_data, actual_latest_historical_date):
     fig = go.Figure()
     if not filtered_historical_data.empty:
         fig.add_trace(
             go.Scatter(
                 x=filtered_historical_data.index,
-                y=filtered_historical_data.values,
+                y=filtered_historical_data.values, # Assuming .values from Series
                 name="Historisch",
-                line=dict(color="#1f77b4", width=2), # Solid line by default
+                line=dict(color="#1f77b4", width=2), 
                 hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Wasserstand: %{y:.2f} m<extra></extra>'
             )
         )
@@ -116,9 +141,9 @@ def plot_water_levels_plotly(filtered_historical_data, forecast_data, actual_lat
         fig.add_trace(
             go.Scatter(
                 x=forecast_data.index,
-                y=forecast_data.values,
+                y=forecast_data.values, # Assuming .values from Series
                 name="Prognose",
-                line=dict(color="#ff7f0e", width=2), # Removed dash='dash' for a solid line
+                line=dict(color="#ff7f0e", width=2), # Original had no dash='dash'
                 hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Prognose: %{y:.2f} m<extra></extra>'
             )
         )
@@ -127,13 +152,14 @@ def plot_water_levels_plotly(filtered_historical_data, forecast_data, actual_lat
     if not filtered_historical_data.empty: y_values.extend(list(filtered_historical_data.values))
     if not forecast_data.empty: y_values.extend(list(forecast_data.values))
     
+    y_plot_min, y_plot_max = 0, 1 
     if y_values:
         y_min_val, y_max_val = min(y_values), max(y_values)
         y_range_val = y_max_val - y_min_val
         y_plot_min = y_min_val - (y_range_val * 0.05) if y_range_val > 0 else y_min_val - 0.5
         y_plot_max = y_max_val + (y_range_val * 0.05) if y_range_val > 0 else y_max_val + 0.5
-    else: y_plot_min, y_plot_max = 0, 1 
 
+    # --- Reverted logic for vertical line and annotation ---
     if actual_latest_historical_date:
         plot_latest_date = pd.Timestamp(actual_latest_historical_date)
         current_plot_min_x = pd.Timestamp.max
@@ -157,6 +183,7 @@ def plot_water_levels_plotly(filtered_historical_data, forecast_data, actual_lat
                 x=plot_latest_date, y=y_plot_max, text="Aktuellster historischer Messwert",
                 showarrow=False, yshift=10, font=dict(color="green", size=10), xanchor="center"
             )
+    # --- End of reverted logic ---
     
     fig.update_layout(
         xaxis_title="Datum", 
@@ -167,26 +194,39 @@ def plot_water_levels_plotly(filtered_historical_data, forecast_data, actual_lat
     )
     return fig
 
+# Main application logic
 def main():
     st.markdown('<div class="app-header"><h1>Edersee Wasserstandsprognose</h1></div>', unsafe_allow_html=True)
     
-    with st.spinner("Lade historische Daten und Modell..."):
-        df_historical_raw = load_data_wrapper() 
+    with st.spinner("Lade und aktualisiere Daten, lade Modell..."):
+        df_historical_raw = load_data_from_s3_and_api() 
         model, scaler = load_model_and_scaler_wrapper()
     
     if df_historical_raw is None or model is None or scaler is None:
         st.warning("Daten oder Modell konnten nicht geladen werden. Die Anwendung kann nicht fortgesetzt werden.")
+        if df_historical_raw is None: logger.error("df_historical_raw is None after loading attempt.")
+        if model is None or scaler is None: logger.error("model or scaler is None after loading attempt.")
         return
     if df_historical_raw.empty:
         st.warning("Keine historischen Daten vorhanden. Prognose oder Anzeige nicht möglich.")
+        logger.warning("df_historical_raw is empty after loading attempt.")
+        return
+
+    if 'value' not in df_historical_raw.columns or df_historical_raw['value'].isna().all():
+        st.error("Die geladenen Daten enthalten keine gültigen 'value'-Einträge. Prognose nicht möglich.")
+        logger.error("df_historical_raw is missing 'value' column or all values are NaN.")
         return
 
     processed_df_for_forecast = add_calendar_features(df_historical_raw.copy())
+    
     forecast_series = pd.Series(dtype='float64')
     try:
-        forecast_series = forecast_next_days(processed_df_for_forecast, model, scaler)
+        lookback_period = 365 
+        if len(processed_df_for_forecast) < lookback_period:
+            raise ValueError(f"Nicht genügend historische Daten ({len(processed_df_for_forecast)} Tage). Benötigt werden {lookback_period} Tage für die Prognose.")
+        forecast_series = forecast_next_days(processed_df_for_forecast, model, scaler, lookback=lookback_period)
     except ValueError as ve:
-        st.error(f"Fehler bei der Prognoseerstellung: {str(ve)}. Nicht genügend historische Daten für das Lookback-Fenster vorhanden.")
+        st.error(f"Fehler bei der Prognoseerstellung: {str(ve)}")
         logger.error(f"Forecast ValueError: {ve}", exc_info=True)
     except Exception as e:
         st.error(f"Ein unerwarteter Fehler ist bei der Prognoseerstellung aufgetreten: {str(e)}")
@@ -194,6 +234,7 @@ def main():
 
     st.markdown("## Aktueller Status & Prognostizierte Änderungen")
     col1, col2, col3 = st.columns(3) 
+    
     historical_values_only = df_historical_raw["value"].dropna()
 
     if not historical_values_only.empty:
@@ -204,6 +245,7 @@ def main():
         with col1:
             st.markdown(f'<div class="metric-card"><div class="metric-label">Aktueller Stand ({current_date_str})</div><div class="metric-value">{current_level:.2f} m</div><div class="metric-label" style="font-size:12px;">Letzte Messung</div></div>', unsafe_allow_html=True)
         
+        # Reverted logic for forecast metric display (closer to original structure)
         if not forecast_series.empty:
             target_date_7_days = latest_historical_date_ts + timedelta(days=7)
             predicted_level_7_days = np.nan
@@ -235,8 +277,10 @@ def main():
                 with col3: st.markdown('<div class="metric-card"><div class="metric-label">Prognostizierte Änderung: Nächste 30 Tage</div><div class="metric-value">N/V</div><div class="metric-label" style="font-size:12px;">Prognose nicht verfügbar</div></div>', unsafe_allow_html=True)
         else:
             with col3: st.markdown('<div class="metric-card"><div class="metric-label">Prognostizierte Änderung: Nächste 30 Tage</div><div class="metric-value">N/V</div><div class="metric-label" style="font-size:12px;">Prognose nicht verfügbar</div></div>', unsafe_allow_html=True)
+
     else:
         st.info("Nicht genügend historische Daten zur Anzeige der aktuellen Messwerte vorhanden.")
+        logger.info("historical_values_only is empty, cannot display current metrics.")
 
     st.markdown("## Visualisierung der Wasserstandsprognose")
     
@@ -250,12 +294,13 @@ def main():
         six_months_ago_from_max = (pd.Timestamp(max_hist_date_val) - pd.DateOffset(months=6)).date()
         default_display_start_date_val = max(six_months_ago_from_max, slider_min_date_val)
 
+        # Reverted slider format to original
         selected_start_date, selected_end_date = st.slider(
             "Zeitraum für historische Daten auswählen (max. 10 Jahre):",
             min_value=slider_min_date_val,
             max_value=max_hist_date_val,
             value=(default_display_start_date_val, max_hist_date_val),
-            format="YYYY-MM-DD", key="date_slider"
+            format="YYYY-MM-DD", key="date_slider" # Original format
         )
         
         display_historical_subset = historical_values_only[
