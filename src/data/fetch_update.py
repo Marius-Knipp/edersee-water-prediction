@@ -6,6 +6,7 @@ from typing import Optional
 import io # For S3
 import boto3 # For S3
 from botocore.exceptions import ClientError # For S3
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -19,8 +20,8 @@ API_BASE_URL = "https://www.pegelonline.wsv.de/webservices/rest-api/v2"
 STATION_SHORTNAME = "edertalsperre"
 
 # S3 Configuration
-S3_BUCKET_NAME = "edersee-water-level"
-S3_DATA_KEY = "water_levels_daily.csv"
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+S3_DATA_KEY = os.getenv("S3_DATA_KEY")
 
 s3_client = boto3.client("s3")
 

@@ -1,0 +1,30 @@
+# Git files
+.git/
+.gitignore
+
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# IDE and OS specific files
+.vscode/
+.idea/
+*.DS_Store
+
+# Project-specific folders to EXCLUDE from the Docker image
+data/          
+notebooks/     
+output/
+
+# Docker files themselves (not needed inside the image)
+Dockerfile
+.dockerignore # Yes, .dockerignore can ignore itself from being copied
+
+# Any other local configuration or temporary files
+*.log
