@@ -1,7 +1,6 @@
 # Edersee Reservoir Water Level Forecast Dashboard
 
 ![Streamlit App Screenshot](https://github.com/Marius-Knipp/edersee-water-prediction/blob/main/output/images/Dashboard_screenshot.png)
-*(Optional: Add a screenshot of your dashboard here. You can upload it to your GitHub repo and link it, or use an image hosting service.)*
 
 ## Project Overview
 
@@ -9,8 +8,7 @@ This project presents a machine learning-driven application to forecast the wate
 
 This project was undertaken as a self-learning initiative to gain practical experience with key data science tools, methodologies, and MLOps practices, including data acquisition, preprocessing, time series forecasting, model deployment, cloud infrastructure management, and CI/CD principles.
 
-**Live Demo (if applicable):** `http://<Your-EC2-Public-IP-or-Domain>`
-*(Note: If you don't intend to keep the EC2 instance running 24/7, either remove this link or add a note about its availability.)*
+**Live Demo:** [Streamlit App](http://18.197.84.254/)
 
 ## Features
 
@@ -61,3 +59,22 @@ This project showcases a range of data science and engineering skills:
     *   **Dependency Management:** `requirements.txt` for Python package management.
     *   **Logging:** Implemented application-level logging for monitoring and debugging.
     *   **Version Control (Git & GitHub):** For code management and collaboration.
+
+
+## Challenges & Learning
+
+*   **Debugging Cloud Deployments:** Encountered initial challenges with AWS App Runner logging and IAM role configurations, leading to a successful pivot to EC2 for more granular control and debugging access. This highlighted the importance of understanding different cloud service models (PaaS vs. IaaS).
+*   **IAM Permissions:** Gained a deeper understanding of IAM roles, policies, and trust relationships for secure AWS resource access, particularly for ECR and S3 interactions from compute services.
+*   **Docker Networking & Port Mapping:** Practical experience with exposing container ports and mapping them to host ports.
+*   **Streamlit in Docker:** Ensured Streamlit server configurations (`--server.address=0.0.0.0`, `--server.headless=true`) were appropriate for a containerized environment.
+*   **Credential Management:** Successfully implemented credential handling via IAM roles for EC2 deployment, avoiding hardcoded keys. For local Docker testing, used environment variables.
+
+## Future Enhancements
+
+*   **HTTPS & Custom Domain:** Implement HTTPS using AWS Certificate Manager and an Application Load Balancer, or Nginx + Let's Encrypt on the EC2 instance, and point a custom domain.
+*   **CI/CD Pipeline:** Automate the build, test, and deployment process using GitHub Actions or AWS CodePipeline.
+*   **Centralized Logging:** Configure Docker to send container logs to AWS CloudWatch Logs.
+*   **Scheduled Data Updates:** Decouple the S3 data update process using AWS Lambda and EventBridge for a more robust pipeline.
+*   **Model Retraining & Versioning:** Implement a strategy for periodic model retraining and versioning (e.g., using MLflow or Sagemaker).
+*   **Advanced Health Checks:** Create a dedicated health check endpoint in the Streamlit app.
+*   **Cost Optimization:** Explore more cost-effective EC2 instance types or serverless options like AWS Fargate if scaling becomes a need.
