@@ -21,10 +21,11 @@ venv/
 data/          
 notebooks/     
 output/
+edersee-ec2-key.pem
 
-# Docker files themselves (not needed inside the image)
+# Docker files themselves 
 Dockerfile
-.dockerignore # Yes, .dockerignore can ignore itself from being copied
+.dockerignore
 
 # Any other local configuration or temporary files
 *.log

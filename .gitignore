@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+edersee-ec2-key.pem

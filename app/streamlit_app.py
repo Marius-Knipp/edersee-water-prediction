@@ -12,8 +12,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 # Import your custom modules
-from src.data.fetch_update import update_historical_data # This now handles S3
-from src.features.preprocessing import add_calendar_features # load_processed_data is not directly needed here anymore
+from src.data.fetch_update import update_historical_data 
+from src.features.preprocessing import add_calendar_features
 from src.models.predict_lstm import load_artifacts, forecast_next_days
 
 # Configure logging
@@ -71,8 +71,7 @@ st.markdown("""
 def load_data_from_s3_and_api():
     try:
         logger.info("Attempting to update and load data from S3 and API...")
-        # update_historical_data now handles S3 read/write and returns the full df
-        # Using days=35 to align with fetch_update.py's __main__ default for sufficient overlap
+        
         df = update_historical_data(days=35) 
 
         if df is None or df.empty:
@@ -80,7 +79,7 @@ def load_data_from_s3_and_api():
             logger.error("update_historical_data returned None or empty DataFrame.")
             return None
 
-        # Ensure 'value' column exists (update_historical_data should provide this)
+        # Ensure 'value' column exists
         if "value" not in df.columns:
              logger.error("DataFrame from update_historical_data is missing 'value' column.")
              st.error("Datenfehler: 'value'-Spalte fehlt nach dem Update-Prozess.")
@@ -97,7 +96,6 @@ def load_data_from_s3_and_api():
         # Final check for NaNs after interpolation
         if df["value"].isna().any():
             logger.warning("Data still contains NaN values after all interpolation attempts. This might affect forecasting.")
-            # Depending on strictness, you might want to st.error here and return None
 
         logger.info(f"Data loaded and preprocessed successfully. Shape: {df.shape}")
         return df
@@ -203,7 +201,7 @@ def main():
     st.markdown('<div class="app-header"><h1>Edersee Wasserstandsprognose</h1></div>', unsafe_allow_html=True)
     
     with st.spinner("Lade und aktualisiere Daten, lade Modell..."):
-        # This now calls the S3-aware data loading function
+
         df_historical_raw = load_data_from_s3_and_api() 
         model, scaler = load_model_and_scaler_wrapper()
     
@@ -217,7 +215,7 @@ def main():
         logger.warning("df_historical_raw is empty after loading attempt.")
         return
 
-    # Ensure 'value' column exists before proceeding (should be handled by load_data_from_s3_and_api)
+    # Ensure 'value' column exists before proceeding
     if 'value' not in df_historical_raw.columns or df_historical_raw['value'].isna().all():
         st.error("Die geladenen Daten enthalten keine gültigen 'value'-Einträge. Prognose nicht möglich.")
         logger.error("df_historical_raw is missing 'value' column or all values are NaN.")
@@ -229,7 +227,7 @@ def main():
     forecast_series = pd.Series(dtype='float64')
     try:
         # Ensure enough data for lookback period
-        lookback_period = 365 # Default, adjust if your model's lookback is different
+        lookback_period = 365
         if len(processed_df_for_forecast) < lookback_period:
             raise ValueError(f"Nicht genügend historische Daten ({len(processed_df_for_forecast)} Tage). Benötigt werden {lookback_period} Tage für die Prognose.")
         forecast_series = forecast_next_days(processed_df_for_forecast, model, scaler, lookback=lookback_period)
@@ -286,8 +284,8 @@ def main():
         actual_min_hist_date = historical_values_only.index.min().date() 
         max_hist_date_val = historical_values_only.index.max().date()
         
-        # Slider range: max 10 years back from latest data, but not before actual earliest data
-        ten_years_ago_from_max = (pd.Timestamp(max_hist_date_val) - pd.DateOffset(years=10)).date()
+        # Slider range: max 5 years back from latest data, but not before actual earliest data
+        ten_years_ago_from_max = (pd.Timestamp(max_hist_date_val) - pd.DateOffset(years=5)).date()
         slider_min_date_val = max(ten_years_ago_from_max, actual_min_hist_date)
         
         # Default display range: last 6 months, but not before slider_min_date_val

@@ -1,11 +1,10 @@
 import requests
 import pandas as pd
 import logging
-from pathlib import Path
 from typing import Optional
-import io # For S3
-import boto3 # For S3
-from botocore.exceptions import ClientError # For S3
+import io 
+import boto3 
+from botocore.exceptions import ClientError 
 import os
 
 # Configure logging
@@ -28,7 +27,6 @@ s3_client = boto3.client("s3")
 def fetch_recent_data(days: int = 15) -> pd.DataFrame:
     """
     Fetch daily water level measurements for the last `days` days from the Edersee API.
-    (Keep this function as is)
     """
     logger.info(f"Fetching station data from {API_BASE_URL}")
     stations_url = f"{API_BASE_URL}/stations.json"
@@ -164,8 +162,7 @@ def update_historical_data(days: int = 15) -> pd.DataFrame:
 
     return combined
 
-# The __main__ block is useful for local testing or a separate update script,
-# but the Streamlit app will call update_historical_data() directly.
+
 if __name__ == "__main__":
     import argparse
 
@@ -199,7 +196,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Set S3 vars from CLI for local testing if provided
     if args.s3_bucket: S3_BUCKET_NAME = args.s3_bucket
     if args.s3_key: S3_DATA_KEY = args.s3_key
 
